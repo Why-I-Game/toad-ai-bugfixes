@@ -251,4 +251,12 @@ class SettingsScreen(ModalScreen):
 
     async def action_dismiss(self, result: ScreenResultType | None = None) -> None:
         self.query("#search").focus()
-        self.call_after_refresh(self.dismiss, result)
+        self.call_after_refresh(self._dismiss_if_current, result)
+
+    def _dismiss_if_current(self, result: ScreenResultType | None) -> None:
+        # The dismiss waits for a refresh, so Esc pressed several times (keys queued
+        # while the app was busy, e.g. restyling for a new theme) queues several.
+        # Only the first may pop: the rest would pop the main screen, and Textual
+        # raises ScreenStackError when one screen is left.
+        if self.is_attached and self.app.screen is self:
+            self.dismiss(result)
