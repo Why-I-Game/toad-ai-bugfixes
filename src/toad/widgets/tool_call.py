@@ -85,6 +85,23 @@ class ToolCall(containers.VerticalGroup):
         self.tool_call = tool_call
         await self.recompose()
 
+    @property
+    def is_running(self) -> bool:
+        """Is the tool call still pending or in progress?"""
+        tool_call = self.tool_call
+        return tool_call is not None and tool_call.get("status") in (
+            None,
+            "pending",
+            "in_progress",
+        )
+
+    async def cancel(self) -> None:
+        """Show the tool call as cancelled, if it has not finished."""
+        if not self.is_running:
+            return
+        assert self.tool_call is not None
+        await self.update_tool_call({**self.tool_call, "status": "cancelled"})
+
     def get_block_menu(self) -> Iterable[MenuItem]:
         if self.expanded:
             yield MenuItem("Collapse", "block.collapse", "x")
@@ -117,7 +134,7 @@ class ToolCall(containers.VerticalGroup):
         assert tool_call is not None
         content: list[protocol.ToolCallContent] = tool_call.get("content", None) or []
 
-        self.set_class(tool_call.get("status") == "failed", "-failed")
+        self.set_class(tool_call.get("status") in ("failed", "cancelled"), "-failed")
 
         self.has_content = False
         content_update = list(self._compose_content(content))
@@ -181,6 +198,8 @@ class ToolCall(containers.VerticalGroup):
             pass
         elif status == "failed":
             header += Content.assemble(" ", pill("failed", "$error-muted", "$error"))
+        elif status == "cancelled":
+            header += Content.assemble(" ", pill("cancelled", "$error-muted", "$error"))
         elif status == "completed":
             header += Content.from_markup(" [$success]✔")
         return header

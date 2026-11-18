@@ -843,6 +843,18 @@ class Conversation(containers.Vertical):
                 self.busy_count -= 1
             self.call_later(self.agent_turn_over, stop_reason)
 
+    async def cancel_running_tool_calls(self) -> None:
+        """Mark tool calls that have not finished as cancelled.
+
+        After a cancel, the agent may send no final status for the tools it stopped, so
+        their rows would show as running for good. ACP says the client should mark them
+        cancelled itself.
+        """
+        from toad.widgets.tool_call import ToolCall
+
+        for tool_call in list(self.contents.query(ToolCall)):
+            await tool_call.cancel()
+
     async def agent_turn_over(self, stop_reason: str | None) -> None:
         """Called when the agent's turn is over.
 
@@ -850,6 +862,8 @@ class Conversation(containers.Vertical):
             stop_reason: The stop reason returned from the Agent, or `None`.
         """
         self.turn = "client"
+        if stop_reason == "cancelled":
+            await self.cancel_running_tool_calls()
         if self._agent_thought is not None and self._agent_thought.loading:
             await self._agent_thought.remove()
         if self._loading is not None:
@@ -1721,6 +1735,7 @@ class Conversation(containers.Vertical):
         if monotonic() - self._last_escape_time < 3:
             if (agent := self.agent) is not None:
                 if await agent.cancel():
+                    await self.cancel_running_tool_calls()
                     self.flash("Turn cancelled", style="success")
                 else:
                     self.flash("Agent declined to cancel. Please wait.", style="error")
