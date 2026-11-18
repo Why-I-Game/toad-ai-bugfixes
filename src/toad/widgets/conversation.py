@@ -993,7 +993,17 @@ class Conversation(containers.Vertical):
 
         tool_call = message.tool_call
 
-        if tool_call.get("status", None) in (None, "completed"):
+        # A tool call made by a subagent (claude-agent-acp stamps
+        # _meta.claudeCode.parentToolUseId) can arrive while the main agent is
+        # streaming its reply. It must not end the reply's block, or the
+        # following text chunks start a new block below the tool row.
+        meta = tool_call.get("_meta")
+        claude_meta = meta.get("claudeCode") if isinstance(meta, dict) else None
+        from_subagent = isinstance(claude_meta, dict) and bool(
+            claude_meta.get("parentToolUseId")
+        )
+
+        if not from_subagent and tool_call.get("status", None) in (None, "completed"):
             self._agent_thought = None
             self._agent_response = None
 
@@ -1003,7 +1013,9 @@ class Conversation(containers.Vertical):
                 tool_id, ToolCall
             )
         except NoMatches:
-            await self.post(ToolCall(tool_call, id=message.tool_id), new_block=True)
+            await self.post(
+                ToolCall(tool_call, id=message.tool_id), new_block=not from_subagent
+            )
         else:
             if existing_tool_call is not None:
                 await existing_tool_call.update_tool_call(tool_call)
