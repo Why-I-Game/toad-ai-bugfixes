@@ -259,6 +259,21 @@ This is a view of your conversation with the agent.
     def update_node_styles(self, animate: bool = True) -> None:
         pass
 
+    @property
+    def is_following(self) -> bool:
+        """Is the view at the end of the conversation (so it should follow new content)?
+
+        True while anchored and not released by the user scrolling up, or when the view
+        is at the bottom anyway (scroll target included, so an animated scroll up
+        already counts as leaving).
+        """
+        if self._anchored and not self._anchor_released:
+            return True
+        return (
+            self.scroll_y >= self.max_scroll_y
+            and self.scroll_target_y >= self.max_scroll_y
+        )
+
 
 class Conversation(containers.Vertical):
     """Holds the agent conversation (input, output, and various controls / information)."""
@@ -1567,6 +1582,16 @@ class Conversation(containers.Vertical):
                     break
                 prune_children.append(child)
 
+        # If the user has scrolled up to read, keep the same block at the same place
+        # on screen instead of jumping to the end.
+        window = self.window
+        follow = window.is_following
+        first_kept = next(
+            (child for child in contents.children if child not in prune_children), None
+        )
+        first_kept_y = first_kept.virtual_region.y if first_kept is not None else 0
+        scroll_y = window.scroll_y
+
         self.cursor_offset = -1
         self.cursor.visible = False
         self.cursor.follow(None)
@@ -1575,7 +1600,20 @@ class Conversation(containers.Vertical):
         if prune_children:
             await contents.remove_children(prune_children)
 
-        self.call_later(self.window.anchor)
+        if follow or first_kept is None:
+            self.call_later(window.anchor)
+        else:
+
+            def keep_view() -> None:
+                """Scroll up by the height removed above the first kept block."""
+                if not first_kept.is_attached:
+                    return
+                removed = first_kept_y - first_kept.virtual_region.y
+                window.scroll_to(
+                    y=max(0, scroll_y - removed), animate=False, immediate=True
+                )
+
+            self.call_after_refresh(keep_view)
 
     async def new_terminal(self) -> Terminal:
         """Create a new interactive Terminal.
