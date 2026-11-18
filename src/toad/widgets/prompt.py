@@ -285,16 +285,17 @@ See on-screen instructions for details.
 
     def action_cursor_up(self, select: bool = False):
         if self.selection.is_empty and not select:
-            row, _column = self.selection[0]
-            if row == 0:
+            # Compare visual (wrapped) rows, not document rows.
+            if self.navigator.is_first_wrapped_line(self.cursor_location):
                 self.post_message(messages.HistoryMove(-1, self.shell_mode, self.text))
                 return
         super().action_cursor_up(select)
 
     def action_cursor_down(self, select: bool = False):
         if self.selection.is_empty and not select:
-            row, _column = self.selection[0]
-            if row == (self.wrapped_document.height - 1):
+            # The cursor row is a document row, but wrapped_document.height counts
+            # visual rows, so the old check never matched once any line soft-wrapped.
+            if self.navigator.is_last_wrapped_line(self.cursor_location):
                 self.post_message(messages.HistoryMove(+1, self.shell_mode, self.text))
                 return
         super().action_cursor_down(select)
