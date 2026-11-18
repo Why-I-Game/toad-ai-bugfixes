@@ -731,6 +731,36 @@ class ToadApp(App, inherit_bindings=False):
             scrollbar=ToadApp.scrollbar,
         )
 
+    def _watch_app_focus(self, focus: bool) -> None:
+        """Textual's version, minus the restyle of the whole screen.
+
+        Textual calls `self.screen.update_node_styles()` here, which matches the CSS of every
+        node (seconds with a long conversation). No Toad rule depends on the app's focus
+        (`:blur` on widgets means "not focused"), and `set_focus` below restyles the widgets
+        whose focus changes. Only the app's own styles are refreshed.
+        """
+        from textual.dom import NoScreen
+
+        self.stylesheet.update_nodes([self], animate=True)
+        if focus:
+            try:
+                if (
+                    self._last_focused_on_app_blur is not None
+                    and self._last_focused_on_app_blur.screen is self.screen
+                    and self.screen.focused is None
+                ):
+                    self.screen.set_focus(
+                        self._last_focused_on_app_blur,
+                        scroll_visible=False,
+                        from_app_focus=True,
+                    )
+            except NoScreen:
+                pass
+            self._last_focused_on_app_blur = None
+        else:
+            self._last_focused_on_app_blur = self.screen.focused
+            self.screen.set_focus(None)
+
     @work
     async def action_settings(self) -> None:
         await self.push_screen_wait("settings")
