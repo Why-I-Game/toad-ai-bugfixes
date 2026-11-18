@@ -587,19 +587,34 @@ class Prompt(containers.VerticalGroup):
             self.question.update(ask)
             self.question.focus()
 
+    def update_prompt_symbol(self, symbol: Content) -> None:
+        """Show the prompt symbol, laying out the label again if its width changes.
+
+        The label has an automatic width, and the symbols differ in width ("☰" is two
+        cells, the others one), so a width change needs a layout.
+
+        Args:
+            symbol: The new prompt symbol.
+        """
+        previous = self.prompt_label.content
+        width_changed = (
+            not isinstance(previous, Content)
+            or previous.cell_length != symbol.cell_length
+        )
+        self.prompt_label.update(symbol, layout=width_changed)
+
     def update_prompt(self):
         """Update the prompt according to the current mode."""
         if self.shell_mode:
-            self.prompt_label.update(self.PROMPT_SHELL, layout=False)
+            self.update_prompt_symbol(self.PROMPT_SHELL)
             self.add_class("-shell-mode")
             self.prompt_text_area.placeholder = Content.from_markup(
                 "Enter shell command\t[r]▌esc▐[/r] prompt mode"
             ).expand_tabs(8)
             self.prompt_text_area.highlight_language = "shell"
         else:
-            self.prompt_label.update(
-                self.PROMPT_MULTILINE if self.multi_line else self.PROMPT_AI,
-                layout=False,
+            self.update_prompt_symbol(
+                self.PROMPT_MULTILINE if self.multi_line else self.PROMPT_AI
             )
             self.remove_class("-shell-mode")
 
