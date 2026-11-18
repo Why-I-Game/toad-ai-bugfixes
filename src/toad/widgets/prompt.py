@@ -395,6 +395,10 @@ See on-screen instructions for details.
                 direction = -1 if x < previous_x else +1
             else:
                 direction = 0
+            # This watcher runs later than the change it reports (it is async), so
+            # quick edits (a held Ctrl+U) may have removed row y in the meantime.
+            if y >= self.document.line_count:
+                return
             line = self.document.get_line(y)
 
             if (
